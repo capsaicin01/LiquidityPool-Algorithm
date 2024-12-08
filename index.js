@@ -117,7 +117,13 @@ async function addLiquidity() {
         {
             type: "number",
             name: "firstAmount",
-            message: "How much do you want to deposit: "
+            message: "How much do you want to deposit: ",
+            validate: function(value) {
+                if (value <= 0) {
+                    return "Please enter a valid amount.";
+                }
+                return true;
+            }
         }
     ]).then(async function (answers) {
         const isTokenA = answers.inputType === "tokenA";
@@ -184,7 +190,7 @@ async function swapTokens() {
             message: 'Enter amount to swap:',
             validate: function(value) {
                 if (value <= 0) {
-                    return 'Please enter an amount';
+                    return 'Please enter a valid amount';
                 }
                 return true;
             }
