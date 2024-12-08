@@ -166,13 +166,22 @@ async function addLiquidity() {
     })
 }
 
+function calculateOutputAmount(inputAmount, inputReserve, outputReserve) {
+    const numerator = inputAmount * outputReserve;
+    const denominator = inputReserve + inputAmount;
+    return Math.floor(numerator / denominator);
+}
+
 async function swapTokens() {
     const userBalance = await getUserBalance();
+    const poolData = await getPoolData();
     
-    if (!userBalance) {
-        console.log('Error: Could not fetch user balance');
+    if (!userBalance || !poolData) {
+        console.log('Error: Could not fetch data');
         return app_process();
     }
+
+    const initialK = poolData.tokenA * poolData.tokenB;
 
     inquirer.prompt([
         {
@@ -190,44 +199,78 @@ async function swapTokens() {
             message: 'Enter amount to swap:',
             validate: function(value) {
                 if (value <= 0) {
-                    return 'Please enter a valid amount';
+                    return 'Please enter an amount';
                 }
                 return true;
             }
         }
     ]).then(async function(answers) {
         const isAtoB = answers.swapDirection === 'Token A → Token B';
-        const amount = answers.amount;
+        const inputAmount = answers.amount;
 
-        
-        if (isAtoB && userBalance.tokenA < amount) {
+        if (isAtoB && userBalance.tokenA < inputAmount) {
             console.log('\nInsufficient Token A balance');
             return app_process();
-        } else if (!isAtoB && userBalance.tokenB < amount) {
+        } else if (!isAtoB && userBalance.tokenB < inputAmount) {
             console.log('\nInsufficient Token B balance');
+            return app_process();
+        }
+
+        const outputAmount = isAtoB 
+            ? calculateOutputAmount(inputAmount, poolData.tokenA, poolData.tokenB)
+            : calculateOutputAmount(inputAmount, poolData.tokenB, poolData.tokenA);
+        
+        console.log('\nSwap Preview:');
+        console.log(`Input: ${inputAmount} ${isAtoB ? 'Token A' : 'Token B'}`);
+        console.log(`Output: ${outputAmount} ${isAtoB ? 'Token B' : 'Token A'}`);
+        
+        const newTokenA = isAtoB ? poolData.tokenA + inputAmount : poolData.tokenA - outputAmount;
+        const newTokenB = isAtoB ? poolData.tokenB - outputAmount : poolData.tokenB + inputAmount;
+
+        const confirmation = await inquirer.prompt([
+            {
+                type: 'confirm',
+                name: 'proceed',
+                message: 'Do you want to proceed with this swap?',
+                default: false
+            }
+        ]);
+
+        if (!confirmation.proceed) {
+            console.log('\nSwap cancelled');
             return app_process();
         }
 
        
         const newUserBalance = {
-            tokenA: isAtoB ? userBalance.tokenA - amount : userBalance.tokenA + amount,
-            tokenB: isAtoB ? userBalance.tokenB + amount : userBalance.tokenB - amount
+            tokenA: isAtoB 
+                ? userBalance.tokenA - inputAmount 
+                : userBalance.tokenA + outputAmount,
+            tokenB: isAtoB 
+                ? userBalance.tokenB + outputAmount 
+                : userBalance.tokenB - inputAmount
         };
         
         
-        const poolData = await getPoolData();
         const newPoolData = {
-            tokenA: isAtoB ? poolData.tokenA + amount : poolData.tokenA - amount,
-            tokenB: isAtoB ? poolData.tokenB - amount : poolData.tokenB + amount,
-            K: poolData.K // K remains constant
+            tokenA: newTokenA,
+            tokenB: newTokenB,
+            K: initialK 
         };
 
-       
+        if (newPoolData.tokenA <= 0 || newPoolData.tokenB <= 0) {
+            console.log('\nError: Swap would deplete the pool');
+            return app_process();
+        }
+
+        
+
         await updateUserBalance(newUserBalance);
         await updatePoolData(newPoolData);
 
         console.log('\nSwap successful!');
-        console.log(`Swapped ${amount} ${isAtoB ? 'Token A for Token B' : 'Token B for Token A'}`);
+        console.log(`Swapped ${inputAmount} ${isAtoB ? 'Token A' : 'Token B'} for ${outputAmount} ${isAtoB ? 'Token B' : 'Token A'}`);
+
         app_process();
     });
 }
