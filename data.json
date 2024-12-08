@@ -1,0 +1,11 @@
+{
+    "pool": {
+        "tokenA": 1100,
+        "tokenB": 900,
+        "K": 1000000
+    },
+    "userBalance": {
+        "tokenA": 400,
+        "tokenB": 600
+    }
+}
