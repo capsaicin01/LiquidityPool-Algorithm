@@ -104,9 +104,60 @@ async function viewAccountBalance() {
     app_process();
 }
 
-function addLiquidity() {
-    // Code
-    app_process();
+async function addLiquidity() {
+    const poolStatus = await getPoolData();
+
+    inquirer.prompt([
+        {
+            type: "list",
+            name: "inputType",
+            message: "Select which currency to deposit first: ",
+            choices: ["tokenA", "tokenB"]
+        },
+        {
+            type: "number",
+            name: "firstAmount",
+            message: "How much do you want to deposit: "
+        }
+    ]).then(async function (answers) {
+        const isTokenA = answers.inputType === "tokenA";
+        const firstAmount = answers.firstAmount;
+        const secondAmount = isTokenA ? (firstAmount / poolStatus.tokenA) * poolStatus.tokenB : (firstAmount / poolStatus.tokenB) * poolStatus.tokenA;
+        const formatOrder = isTokenA ? ["tokenA", "tokenB"] : ["tokenB", "tokenA"];
+
+        console.log(`In order to deposit ${firstAmount} ${formatOrder[0]}, you need to also deposit ${secondAmount} ${formatOrder[1]}.`)
+        inquirer.prompt([
+            {
+                type: "confirm",
+                name: "confirmation",
+                message: "Do you confirm?"
+            }
+        ]).then(async function(answer) {
+            if (answer.confirmation) {
+                const userBalance = await getUserBalance();
+
+                const newPoolValues = {
+                    tokenA: isTokenA ? poolStatus.tokenA + firstAmount : poolStatus.tokenA + secondAmount,
+                    tokenB: isTokenA ? poolStatus.tokenB + secondAmount: poolStatus.tokenB + firstAmount,
+                }
+                newPoolValues.K = newPoolValues.tokenA * newPoolValues.tokenB;
+
+                const newUserBalance = {
+                    tokenA: isTokenA ? userBalance.tokenA + firstAmount : userBalance.tokenA + secondAmount,
+                    tokenB: isTokenA ? userBalance.tokenB + secondAmount : userBalance.tokenB + firstAmount
+                }
+            
+                await updatePoolData(newPoolValues);
+                await updateUserBalance(newUserBalance);
+
+                console.log("Deposition successful.");
+                return app_process();
+            }else {
+                console.log("Deposition cancelled.");
+                return app_process();
+            }
+        })
+    })
 }
 
 async function swapTokens() {
